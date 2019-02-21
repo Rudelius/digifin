@@ -21,26 +21,20 @@ municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/lan.c
 
 ######################################## Data cleaning part #######################################
 
-# Drop key attribute.
+# Drop attributes.
 loandata$key <- NULL
+loandata$addresstype <- NULL
+loandata$lastaddresschange <- NULL
 
 # Reformat dates into year numerics.
-loandata[,1] = 2000+(unclass(as.Date(loandata$creationdateuserloan))-unclass(as.Date("2000/01/01")))/365 #creationdateuserloan
-loandata[,25] = 2000+(unclass(as.Date(loandata$lastucrequest))-unclass(as.Date("2000/01/01")))/365 #lastucrequest
-v <- loandata$lastaddresschange #add day "01" to lastaddresschange dates which are in format: "YYYYMM"; avoid pasting into NAs.
-for (i in 1:length(v)){
-  if(!is.na(v[i])){
-    v[i] <- paste(v[i],"01",sep="") 
-  }
-}
-loandata$lastaddresschange <- 2000+(unclass(as.Date(v, format="%Y%m%d"))-unclass(as.Date("2000/01/01")))/365 #lastaddresschange
+loandata$creationdateuserloan = 2000+(unclass(as.Date(loandata$creationdateuserloan))-unclass(as.Date("2000/01/01")))/365 #creationdateuserloan
+loandata$lastucrequest = 2000+(unclass(as.Date(loandata$lastucrequest))-unclass(as.Date("2000/01/01")))/365 #lastucrequest
 
-# Replace "None", "NA", "Other" and empty string with NA. Requires dplyr package.
+# Replace "None", "NA" and empty string with NA. Requires dplyr package.
 for (i in 1:length(loandata)){
   loandata[,i] <- na_if(loandata[,i], "None")
   loandata[,i] <- na_if(loandata[,i], "")
   loandata[,i] <- na_if(loandata[,i], "NA")
-  loandata[,i] <- na_if(loandata[,i], "Other")
 }
 
 # Clean faulty jobtype data.
@@ -73,32 +67,43 @@ loandata$municipality <- as.factor(utf8_encode(a))
 # VLOOKUP municipality -> region to reduce number of geographical data factor levels.
 loandata <- (merge(municipalities, loandata, by = 'municipality'))
 
+# Optional to save data to new csv file.
+#write.csv(loandata, file = "/Users/johan/Dropbox/Handels/digifin/data/loandata_clean.csv")
 
 
-####################################### Machinelearning part ######################################
 
-# Create a vector to randomly split the dataset into training and test ratio 9:1
-trainingRows <- sample(1:nrow(loandata), 0.9*length(loandata[,1]))
+######################################## Data splitting and final cleaning part #######################################
+
+# Create a vector to randomly split the dataset into training and test ratio 8:2
+trainingRows <- sample(1:nrow(loandata), 0.8*length(loandata[,1]))
 
 # Split loandata into training and test sets
 loandata.train <- loandata[trainingRows, ]
 loandata.test <- loandata[-trainingRows, ]
 
-# Generate a tree on the training data. Nate that there seems to be a greediness problem, with the tree improving when we remove category.
-tree.loandata <- tree(formula = newpayingremark ~ .-municipality-newpayingremark-category-jobtype, data = loandata, subset = trainingRows)
+# Handle NA values in training set; remove rows with NA as lastucrequest, and create a NA factor level for categorical variables.
+loandata.train <- loandata.train[!is.na(loandata.train$lastucrequest),]
+loandata.train <- na.tree.replace(loandata.train)
+
+
+
+####################################### Tree part ######################################
+
+# Generate a tree on the training data. Note that there seems to be a greediness problem, with the tree improving when we remove category.
+tree.loandata <- tree(formula = newpayingremark ~ .-municipality-newpayingremark, data = loandata, subset = trainingRows)
 
 # Cross validation
 cv.loandata <- cv.tree(tree.loandata)
 
 # print results
-#cv.loandata 
+cv.loandata 
 
 # Plot cv results
 plot(cv.loandata$size, cv.loandata$dev, type = "b")
 plot(cv.loandata$k, cv.loandata$dev, type = "b")
 
 # Prune to 2 leaf nodes, which usually gives the best result depending on random draw
-tree.loandata.pruned <- prune.tree(tree.loandata, best = 2)
+tree.loandata.pruned <- prune.tree(tree.loandata, best = 3)
 
 # Plot trees
 plot(tree.loandata)
@@ -108,6 +113,7 @@ title(main = "Unpruned")
 plot(tree.loandata.pruned)
 text(tree.loandata.pruned, pretty = 0)
 title(main = "Pruned")
+
 
 
 ####################################### Testing part ######################################
@@ -145,8 +151,6 @@ stats <- matrix(c(meanError.tree.loandata, correctPredictions.tree.loandata,
 colnames(stats) <- c('unpruned', 'pruned')
 rownames(stats) <- c('meanError', 'correctPredictions')
 as.table(stats)
-
-
 
 #################################### Bagging part ######################################
 
