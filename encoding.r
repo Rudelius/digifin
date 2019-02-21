@@ -102,7 +102,7 @@ cv.loandata
 plot(cv.loandata$size, cv.loandata$dev, type = "b")
 plot(cv.loandata$k, cv.loandata$dev, type = "b")
 
-# Prune to 2 leaf nodes, which usually gives the best result depending on random draw
+# Prune the tree to remove nodes that does not improve prediction.
 tree.loandata.pruned <- prune.tree(tree.loandata, best = 3)
 
 # Plot trees
@@ -152,14 +152,12 @@ colnames(stats) <- c('unpruned', 'pruned')
 rownames(stats) <- c('meanError', 'correctPredictions')
 as.table(stats)
 
+
+
 #################################### Bagging part ######################################
 
-# Inpute values for the NA:s with random forests and proximity, takes a while.
-#loandata.naInpute <- rfImpute(x = loandata[,2:27], y = loandata$newpayingremark, iter=1, ntree=10)
-#colnames(loandata.naInpute)[1] <- "newpayingremark"
-
 # Make a bagging model.
-#bag.loandata = randomForest(x = loandata.naInpute[,2:26], y = loandata$newpayingremark, 
+#bag.loandata = randomForest(x = loandata.[,2:26], y = loandata$newpayingremark, 
 #                            subset = trainingRows, mtry = 25, importance = TRUE, ntree = 10)
 
 #pred.bag.loandata <- predict(bag.loandata, newdata = loandata.test)
