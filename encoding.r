@@ -25,15 +25,15 @@ municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/lan.c
 loandata$key <- NULL
 
 # Reformat dates into year numerics.
-loandata[,1] = 2000+(unclass(as.Date(loandata[,1]))-unclass(as.Date("2000/01/01")))/365 #creationdateuserloan
-loandata[,25] = 2000+(unclass(as.Date(loandata[,25]))-unclass(as.Date("2000/01/01")))/365 #lastucrequest
-v <- loandata[,22] #add day "01" to lastaddresschange dates which are in format: "YYYYMM"; avoid pasting into NAs.
+loandata[,1] = 2000+(unclass(as.Date(loandata$creationdateuserloan))-unclass(as.Date("2000/01/01")))/365 #creationdateuserloan
+loandata[,25] = 2000+(unclass(as.Date(loandata$lastucrequest))-unclass(as.Date("2000/01/01")))/365 #lastucrequest
+v <- loandata$lastaddresschange #add day "01" to lastaddresschange dates which are in format: "YYYYMM"; avoid pasting into NAs.
 for (i in 1:length(v)){
   if(!is.na(v[i])){
     v[i] <- paste(v[i],"01",sep="") 
   }
 }
-loandata[,22] <- 2000+(unclass(as.Date(v, format="%Y%m%d"))-unclass(as.Date("2000/01/01")))/365 #lastaddresschange
+loandata$lastaddresschange <- 2000+(unclass(as.Date(v, format="%Y%m%d"))-unclass(as.Date("2000/01/01")))/365 #lastaddresschange
 
 # Replace "None", "NA", "Other" and empty string with NA. Requires dplyr package.
 for (i in 1:length(loandata)){
@@ -44,7 +44,7 @@ for (i in 1:length(loandata)){
 }
 
 # Clean faulty jobtype data.
-x <- loandata[,11]
+x <- loandata$jobtype
 x <- replace(x, x == "Agricul", "Agriculture")
 x <- replace(x, x == "Custome", "CustomerServ")
 x <- replace(x, x == "Economi", "Economics")
@@ -58,17 +58,17 @@ x <- replace(x, x == "Publish", "Publishing")
 x <- replace(x, x == "Realest", "Realestate")
 x <- replace(x, x == "Researc", "Research")
 x <- replace(x, x == "Securit", "Security")
-loandata[,11] <- factor(x)
+loandata$jobtype <- factor(x)
 
 # Clean faulty jobstatus data.
-x <- loandata[,10]
+x <- loandata$jobstatus
 x <- replace(x, x == "TemporaryEmployme", "TemporaryEmployment")
-loandata[,10] <- factor(x)
+loandata$jobstatus <- factor(x)
 
 # Fix encoding of Swedish special characters for municipality.
-a = as.character(loandata[,23])
+a = as.character(loandata$municipality)
 Encoding(a) <- "latin1"
-loandata[,23] <- as.factor(utf8_encode(a))
+loandata$municipality <- as.factor(utf8_encode(a))
 
 # VLOOKUP municipality -> region to reduce number of geographical data factor levels.
 loandata <- (merge(municipalities, loandata, by = 'municipality'))
@@ -116,28 +116,28 @@ title(main = "Pruned")
 pred.tree.loandata <- predict(tree.loandata, loandata.test, type = "vector")
 correctPredictions = 0
 for (i in 1:length(pred.tree.loandata)){
-  if(abs(pred.tree.loandata[i]-loandata.test[i,28]) < 0.5){
+  if(abs(pred.tree.loandata[i]-loandata.test$newpayingremark[i]) < 0.5){
     correctPredictions = correctPredictions + 1
   } 
 }
 correctPredictions.tree.loandata <- correctPredictions / length(loandata.test[,1])
 
 # Calculate the mean error of predictions for unpruned tree.
-meanError.tree.loandata <- mean(abs(pred.tree.loandata-loandata.test[,28]))
+meanError.tree.loandata <- mean(abs(pred.tree.loandata-loandata.test$newpayingremark))
 
 
 # Calculate percentage of correct predictions for pruned tree.
 pred.tree.loandata.pruned <- predict(tree.loandata.pruned, loandata.test, type = "vector")
 correctPredictions = 0
 for (i in 1:length(pred.tree.loandata.pruned)){
-  if(abs(pred.tree.loandata.pruned[i]-loandata.test[i,28]) < 0.5){
+  if(abs(pred.tree.loandata.pruned[i]-loandata.test$newpayingremark[i]) < 0.5){
     correctPredictions = correctPredictions + 1
   } 
 }
 correctPredictions.tree.loandata.pruned <- correctPredictions / length(loandata.test[,1])
 
 # Calculate the mean error of predictions for pruned tree.
-meanError.tree.loandata.pruned <- mean(abs(pred.tree.loandata.pruned-loandata.test[,28]))
+meanError.tree.loandata.pruned <- mean(abs(pred.tree.loandata.pruned-loandata.test$newpayingremark))
 
 stats <- matrix(c(meanError.tree.loandata, correctPredictions.tree.loandata,
                   meanError.tree.loandata.pruned, correctPredictions.tree.loandata.pruned)
@@ -151,11 +151,11 @@ as.table(stats)
 #################################### Bagging part ######################################
 
 # Inpute values for the NA:s with random forests and proximity, takes a while.
-loandata.naInpute <- rfImpute(x = loandata[,2:27], y = loandata$newpayingremark, iter=1, ntree=10)
-colnames(loandata.naInpute)[1] <- "newpayingremark"
+#loandata.naInpute <- rfImpute(x = loandata[,2:27], y = loandata$newpayingremark, iter=1, ntree=10)
+#colnames(loandata.naInpute)[1] <- "newpayingremark"
 
 # Make a bagging model.
-bag.loandata = randomForest(x = loandata.naInpute[,2:26], y = loandata$newpayingremark, 
-                            subset = trainingRows, mtry = 25, importance = TRUE, ntree = 10)
+#bag.loandata = randomForest(x = loandata.naInpute[,2:26], y = loandata$newpayingremark, 
+#                            subset = trainingRows, mtry = 25, importance = TRUE, ntree = 10)
 
-pred.bag.loandata <- predict(bag.loandata, newdata = loandata.test)
+#pred.bag.loandata <- predict(bag.loandata, newdata = loandata.test)
