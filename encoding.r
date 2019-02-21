@@ -156,14 +156,16 @@ as.table(stats)
 
 #################################### Bagging part ######################################
 
+# Necessary fixing of NA values for random forest to work, drop lastucrequest, and add NA factor level.
+# loandata.test <- loandata.test[!is.na(loandata.test$lastucrequest),] old
+loandata.test$lastucrequest <- NULL
+loandata.train$lastucrequest <- NULL
+loandata.test <- na.tree.replace(loandata.test)
+
 # Make a bagging model.
-bagg.loandata = randomForest(x = loandata.train[,1:25], y = loandata.train$newpayingremark, 
+bagg.loandata = randomForest(x = loandata.train[,1:24], y = loandata.train$newpayingremark, 
                             subset = trainingRows, mtry = length(loandata.train)-1,
                             importance = TRUE, ntree = 10)
-
-# Necessary fixing of NA values for random forest no work, same as for training data in the tree model.
-loandata.test <- loandata.test[!is.na(loandata.test$lastucrequest),]
-loandata.test <- na.tree.replace(loandata.test)
 
 # Evaluate Bagging model.
 pred.bagg.loandata <- predict(bagg.loandata, newdata = loandata.test)
