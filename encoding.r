@@ -10,7 +10,7 @@ par(mfrow= c(1,2))
 # Clean environment.
 rm(list = ls())
 
-# Import loandata.
+# Import unmodified loandata. 
 loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/loandata.csv", header = TRUE, sep=",")
 
 # Import prepared municipality -> region dataset.
@@ -100,8 +100,8 @@ cv.loandata <- cv.tree(tree.loandata)
 cv.loandata 
 
 # Plot cv results.
-plot(cv.loandata$size, cv.loandata$dev, type = "b")
-plot(cv.loandata$k, cv.loandata$dev, type = "b")
+plot(cv.loandata$size, cv.loandata$dev, type = "b", main = "CV deviation depending on tree size")
+plot(cv.loandata$k, cv.loandata$dev, type = "b", main = "CV deviation depending on k")
 
 # Prune the tree to remove nodes that do not improve prediction.
 tree.loandata.pruned <- prune.tree(tree.loandata, best = 3)
@@ -165,7 +165,10 @@ loandata.test <- na.tree.replace(loandata.test)
 # Make a bagging model.
 bagg.loandata = randomForest(x = loandata.train[,1:24], y = loandata.train$newpayingremark, 
                             subset = trainingRows, mtry = length(loandata.train)-1,
-                            importance = TRUE, ntree = 10)
+                            importance = TRUE, ntree = 100)
+par(mfrow= c(1,1))
+plot(bagg.loandata, main = "OOB error to number of trees")
+par(mfrow= c(1,2))
 
 # Evaluate Bagging model.
 pred.bagg.loandata <- predict(bagg.loandata, newdata = loandata.test)
