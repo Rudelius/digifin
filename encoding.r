@@ -11,11 +11,11 @@ par(mfrow= c(1,2))
 rm(list = ls())
 
 # Import loandata.
-loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/Lendify data/loandata.csv", header = TRUE, sep=",")
+loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/loandata.csv", header = TRUE, sep=",")
 
 # Import prepared municipality -> region dataset.
 # https://www.dropbox.com/s/04puwtchxprr1w3/lan.csv?dl=0
-municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/lan.csv", header = TRUE, sep=";")
+municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/lan.csv", header = TRUE, sep=";")
 
 
 
@@ -85,7 +85,7 @@ loandata.train <- loandata[trainingRows, ]
 loandata.test <- loandata[-trainingRows, ]
 
 # Generate a tree on the training data. Nate that there seems to be a greediness problem, with the tree improving when we remove category.
-tree.loandata <- tree(formula = newpayingremark ~ .-municipality-newpayingremark, data = loandata, subset = trainingRows)
+tree.loandata <- tree(formula = newpayingremark ~ .-municipality-newpayingremark-category-jobtype, data = loandata, subset = trainingRows)
 
 # Cross validation
 cv.loandata <- cv.tree(tree.loandata)
@@ -155,5 +155,7 @@ loandata.naInpute <- rfImpute(x = loandata[,2:27], y = loandata$newpayingremark,
 colnames(loandata.naInpute)[1] <- "newpayingremark"
 
 # Make a bagging model.
-bag.loandata = randomForest(loandata.naInpute[2,26], loandata$newpayingremark, 
-                            subset = trainingRows, mtry = 26, importance = TRUE, ntree = 10)
+bag.loandata = randomForest(x = loandata.naInpute[,2:26], y = loandata$newpayingremark, 
+                            subset = trainingRows, mtry = 25, importance = TRUE, ntree = 10)
+
+pred.bag.loandata <- predict(bag.loandata, newdata = loandata.test)
