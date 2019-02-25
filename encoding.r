@@ -1,4 +1,4 @@
-# Dependencies: install.packages(dplyr", "utf8", "tree", "randomForest", "gbm", "keras")
+# Dependencies: install.packages("dplyr", "utf8", "tree", "randomForest", "gbm", "keras")
 # Install keras with: devtools::install_github("rstudio/keras")
 # Also: install_keras()
 library(dplyr)
