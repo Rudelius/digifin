@@ -26,9 +26,14 @@ loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/loandata.cs
 # https://www.dropbox.com/s/04puwtchxprr1w3/lan.csv?dl=0
 municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/lan.csv", header = TRUE, sep=";")
 
-
+# Import stockdata
+stockdata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/stockdata.csv", header = TRUE, sep=";")
+stockdata$Closing.price <- as.numeric(stockdata$Closing.price)
 
 ######################################## Data cleaning part #######################################
+
+# VLOOKUP creationdateuserloan -> OMXS30 closing value.
+loandata <- (merge(stockdata, loandata, by = 'creationdateuserloan'))
 
 # Reformat dates into year numerics.
 loandata$creationdateuserloan = 2000+(unclass(as.Date(loandata$creationdateuserloan))-unclass(as.Date("2000/01/01")))/365 #creationdateuserloan
@@ -236,7 +241,7 @@ varImpPlot (randomForest.loandata )
 #################################### Boosting part ######################################
 
 boost.loandata = gbm(newpayingremark~ ., data = loandata.train, cv.folds = 10,
-                 n.trees = 100, interaction.depth = 3, distribution = "gaussian")
+                 n.trees = 50, interaction.depth = 8, distribution = "gaussian")
  
 summary(boost.loandata)
 
@@ -370,3 +375,35 @@ colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest', 
 # Print stats table.
 as.table(stats)
 
+
+
+################################## OLS regression part ###################################
+
+olsreg = lm(newpayingremark ~ .-newpayingremark, data = loandata.train)
+
+# Plotting the regression
+plot(olsreg)
+
+# Create summary table from regression
+summary(olsreg)
+
+# Calculate percentage of correct predictions for OLS model.
+pred.ols = predict.lm(olsreg, newdata = loandata.test)
+
+correctPredictions = 0
+for (i in 1:length(pred.ols)){
+  if(abs(pred.ols[i]-loandata.test$newpayingremark[i]) < 0.5){
+    correctPredictions = correctPredictions + 1
+  }
+}
+correctPredictions.ols <- correctPredictions / length(loandata.test[,1])
+
+# Calculate the mean error of predictions for OLS model.
+meanError.ols <- mean(abs(pred.ols-loandata.test$newpayingremark))
+
+# Add the new statistics to the stats table.
+tempMatrix <- matrix(c(meanError.ols, correctPredictions.ols), ncol = 1)
+stats <- cbind(stats, tempMatrix)
+colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest', 'boosting', 'neuro network', 'ols')
+
+as.table(stats)
