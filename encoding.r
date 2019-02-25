@@ -1,4 +1,6 @@
 # Dependencies: install.packages(dplyr", "utf8", "tree", "randomForest", "gbm", "keras")
+# Install keras with: devtools::install_github("rstudio/keras")
+# Also: install_keras()
 library(dplyr)
 library(utf8)
 library(tree)
@@ -331,7 +333,7 @@ model %>% compile(
 
 history <- model %>% fit(
   x.train, y.train, 
-  epochs = 25,
+  epochs = 30,
   batch_size = 128, 
   validation_split = 0.1
 )
