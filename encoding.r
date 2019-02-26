@@ -1,8 +1,9 @@
 # Dependencies: install.packages("dplyr", "utf8", "tree", "randomForest", "gbm")
-# Install keras in following order:
+# Install keras before executing, in following order:
 # 1. devtools::install_github("rstudio/keras")
-# 3. library(keras)
-# 2. install_keras()
+# 2. library(keras)
+# 3. install_keras()
+use_python("/usr/bin/python") # comment out if you don't have a Python version conflict.
 library(dplyr)
 library(utf8)
 library(tree)
@@ -10,14 +11,13 @@ library(randomForest)
 library(gbm)
 library(keras)
 library(reticulate)
-use_python("/usr/bin/python")
-#set.seed(1)
+set.seed(1)
 
 # Plot two plots at a time.
 par(mfrow= c(1,2))
 
 # Clean environment.
-#rm(list = ls())
+rm(list = ls())
 
 # Import unmodified loandata. 
 loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/loandata.csv", header = TRUE, sep=",")
@@ -27,8 +27,10 @@ loandata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/loandata.cs
 municipalities <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/lan.csv", header = TRUE, sep=";")
 
 # Import stockdata
+# https://www.dropbox.com/s/pkuoez2locglq2r/stockdata.csv?dl=0
 stockdata <- read.csv(file="/Users/johan/Dropbox/Handels/digifin/data/stockdata.csv", header = TRUE, sep=";")
 stockdata$Closing.price <- as.numeric(stockdata$Closing.price)
+
 
 ######################################## Data cleaning part #######################################
 
@@ -86,7 +88,6 @@ loandata$lastaddresschange <- NULL
 loandata$municipality <- NULL
 
 
-
 ######################################## Data splitting and final cleaning part #######################################
 
 # Create a vector to randomly split the dataset into training and test, ratio 8:2.
@@ -99,7 +100,6 @@ loandata.test <- loandata[-trainingRows, ]
 # Handle NA values in training set; remove rows with NA as lastucrequest, and create a NA factor level for categorical variables.
 loandata.train <- loandata.train[!is.na(loandata.train$lastucrequest),]
 loandata.train <- na.tree.replace(loandata.train)
-
 
 
 ####################################### Tree part ######################################
@@ -118,14 +118,14 @@ plot(cv.loandata$size, cv.loandata$dev, type = "b", main = "CV deviation dependi
 plot(cv.loandata$k, cv.loandata$dev, type = "b", main = "CV deviation depending on k")
 
 # Prune the tree to remove nodes that do not improve prediction.
-tree.loandata.pruned <- prune.tree(tree.loandata, best = 3)
+tree.loandata.pruned <- prune.tree(tree.loandata, best = 4)
 
 # Plot trees.
 plot(tree.loandata)
-text(tree.loandata, pretty = 0)
+text(tree.loandata, pretty = 1)
 title(main = "Unpruned")
 plot(tree.loandata.pruned)
-text(tree.loandata.pruned, pretty = 0)
+text(tree.loandata.pruned, pretty = 1)
 title(main = "Pruned")
 
 # Calculate percentage of correct predictions for unpruned tree.
@@ -163,10 +163,10 @@ rownames(stats) <- c('meanError', 'correctPredictions')
 as.table(stats)
 
 
-
 #################################### Bagging part ######################################
 
-# Necessary fixing of NA values for random forest to work, drop lastucrequest, and add NA factor level.
+# Necessary removal of the lastucrequest variable because predict.randomForest is unable to handle missing values.
+# Categorical values in the test set is also provided an "NA" level as was previously done for the training data.
 loandata.test$lastucrequest <- NULL
 loandata.train$lastucrequest <- NULL
 loandata.test <- na.tree.replace(loandata.test)
@@ -195,13 +195,13 @@ meanError.bagg.loandata <- mean(abs(pred.bagg.loandata-loandata.test$newpayingre
 
 # Add the new statistics to the stats table.
 tempMatrix <- matrix(c(meanError.bagg.loandata, correctPredictions.bagg.loandata))
+stats <- stats[,-3]
 stats <- cbind(stats, tempMatrix)
 colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging')
 as.table(stats)
 
 # Plot relative importance of input features.
 varImpPlot (bagg.loandata )
-
 
 
 #################################### Random forest part ######################################
@@ -230,6 +230,7 @@ meanError.randomForest.loandata <- mean(abs(pred.randomForest.loandata-loandata.
 
 # Add the new statistics to the stats table.
 tempMatrix <- matrix(c(meanError.randomForest.loandata, correctPredictions.randomForest.loandata) , ncol = 1)
+stats <- stats[,-4]
 stats <- cbind(stats, tempMatrix)
 colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest')
 as.table(stats)
@@ -240,18 +241,22 @@ varImpPlot (randomForest.loandata )
 
 #################################### Boosting part ######################################
 
-boost.loandata = gbm(newpayingremark~ ., data = loandata.train, cv.folds = 10,
-                 n.trees = 50, interaction.depth = 8, distribution = "gaussian")
- 
-summary(boost.loandata)
+# Create a boosting model.
+boost.loandata = gbm(newpayingremark~ ., data = loandata.train, cv.folds = 10, shrinkage = 0.1,
+                 n.trees = 98, interaction.depth = 7, distribution = "gaussian")
 
+# Print summary
+summary(boost.loandata, cBars = 5, order = TRUE)
+
+# Plot information about most important variables.
 par(mfrow=c(1,2))
 plot(boost.loandata ,i="noinquiries")
-plot(boost.loandata ,i="ucriskperson")
+plot(boost.loandata ,i="amount")
 plot(boost.loandata ,i="creationdateuserloan")
+plot(boost.loandata ,i="ucriskperson")
 
 # Calculate percentage of correct predictions for boosting model.
-pred.boost.loandata <- predict(boost.loandata, newdata = loandata.test, n.trees = 85)
+pred.boost.loandata <- predict(boost.loandata, newdata = loandata.test, n.trees = 100)
 correctPredictions = 0
 for (i in 1:length(pred.boost.loandata)){
   if(abs(pred.boost.loandata[i]-loandata.test$newpayingremark[i]) < 0.5){
@@ -265,6 +270,7 @@ meanError.boost.loandata <- mean(abs(pred.boost.loandata-loandata.test$newpaying
 
 # Add the new statistics to the stats table.
 tempMatrix <- matrix(c(meanError.boost.loandata, correctPredictions.boost.loandata), ncol = 1)
+stats <- stats[,-5]
 stats <- cbind(stats, tempMatrix)
 colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest', 'boosting')
 
@@ -274,8 +280,13 @@ boost.loandata
 # Print stats table.
 as.table(stats)
 
+
 ######################################## Data splitting and final cleaning part #######################################
 
+# backup loandata for logit model.
+loandata_backup <- loandata
+
+# Remove lastucrequest variable to use the function to add NA levels to factor variables.
 loandata$lastucrequest <- NULL
 loandata <- na.tree.replace(loandata)
 
@@ -318,35 +329,36 @@ x.test <- as.matrix( loandata[-trainingRows, 1:114] )
 y.test <- as.matrix( loandata$newpayingremark[-trainingRows] )
 
 
-
 ######################################## Neural network part #######################################
 
+# Implement a neural network model.
 model <- keras_model_sequential() 
-model %>% 
-  layer_dense(units = 3000, activation = 'sigmoid', kernel_initializer = 'normal') %>% 
-  layer_dropout(rate = 0.5) %>% 
-  layer_dense(units = 1500, activation = 'relu', kernel_initializer = 'normal') %>%
-  layer_dropout(rate = 0.3) %>%
-  layer_dense(units = 750, activation = 'relu', kernel_initializer = 'normal') %>%
-  layer_dropout(rate = 0.3) %>%
-  layer_dense(units = 375, activation = 'relu', kernel_initializer = 'normal') %>%
-  layer_dropout(rate = 0.3) %>%
+model %>%
+  layer_dense(units = 114, activation = 'sigmoid', kernel_initializer = 'normal') %>%
+  layer_dropout(rate = 0.2) %>% 
+  layer_dense(units = 67, activation = 'sigmoid', kernel_initializer = 'normal') %>%
+  layer_dropout(rate = 0.2) %>% 
   layer_dense(units = 1, activation = 'linear', kernel_initializer = 'normal')
 
+# Compile mode, use adadelta becuase of the sparse data, MSE for reg.
 model %>% compile(
   loss = 'mean_squared_error',
-  optimizer = optimizer_rmsprop()
+  optimizer = optimizer_adadelta()
 )
 
+# Train data on training data.
 history <- model %>% fit(
-  x.train, y.train, 
-  epochs = 30,
-  batch_size = 128, 
+  x.train, y.train,
+  epochs = 25,
+  batch_size = 128,
   validation_split = 0.1
 )
+
+# Output some statistics.
 plot(history)
 model %>% evaluate(x.test, y.test)
 
+# Use model to generate predictions
 pred.nn.loandata <- model %>% predict(x.test)
 
 # Plot distributions from different models.
@@ -364,6 +376,7 @@ for (i in 1:length(pred.nn.loandata)){
 }
 correctPredictions.nn.loandata <- correctPredictions / length(y.test)
 
+# Calculate the mean error of predictions for NN model.
 meanError.nn.loandata <- mean(abs(pred.nn.loandata-y.test))
 
 # Add the new statistics to the stats table.
@@ -376,9 +389,9 @@ colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest', 
 as.table(stats)
 
 
-
 ################################## OLS regression part ###################################
 
+# Create an OLS model.
 olsreg = lm(newpayingremark ~ .-newpayingremark, data = loandata.train)
 
 # Plotting the regression
@@ -389,7 +402,6 @@ summary(olsreg)
 
 # Calculate percentage of correct predictions for OLS model.
 pred.ols = predict.lm(olsreg, newdata = loandata.test)
-
 correctPredictions = 0
 for (i in 1:length(pred.ols)){
   if(abs(pred.ols[i]-loandata.test$newpayingremark[i]) < 0.5){
@@ -403,7 +415,33 @@ meanError.ols <- mean(abs(pred.ols-loandata.test$newpayingremark))
 
 # Add the new statistics to the stats table.
 tempMatrix <- matrix(c(meanError.ols, correctPredictions.ols), ncol = 1)
+stats <- stats[,-7]
 stats <- cbind(stats, tempMatrix)
-colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'randomForest', 'boosting', 'neuro network', 'ols')
+colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'random forest', 'boosting', 'neural net', 'ols')
+as.table(stats)
 
+
+################################## logit regression part ###################################
+
+# Create a logit model.
+logit.loandata <- glm(newpayingremark~. ,data=loandata.train, family=binomial())
+summary(logit.loandata)
+
+# Calculate percentage of correct predictions for logit model.
+pred.logit.loandata <- predict(logit.loandata, newdata = loandata.test, type="response")
+correctPredictions = 0
+for (i in 1:length(pred.ols)){
+  if(abs(pred.logit.loandata[i]-loandata.test$newpayingremark[i]) < 0.5){
+    correctPredictions = correctPredictions + 1
+  }
+}
+correctPredictions.logit <- correctPredictions / length(loandata.test[,1])
+
+# Calculate the mean error of predictions for logit model.
+meanError.logit <- mean(abs(pred.logit.loandata-loandata.test$newpayingremark))
+
+# Add the new statistics to the stats table.
+tempMatrix <- matrix(c(meanError.logit, correctPredictions.logit), ncol = 1)
+stats <- cbind(stats, tempMatrix)
+colnames(stats) <- c('unpruned tree', 'pruned tree', 'bagging', 'random forest', 'boosting', 'neural net', 'ols', 'logit')
 as.table(stats)
